@@ -1,0 +1,76 @@
+name: Windows10Lite-RDP-VBAudio
+
+on:
+  workflow_dispatch:
+
+jobs:
+  win10:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Install QEMU
+        run: |
+          sudo apt update
+          sudo apt install -y qemu-system-x86 qemu-utils wget genisoimage
+
+      - name: Download Windows 10 Lite ISO
+        run: |
+          mkdir winlite
+          cd winlite
+          wget -O winlite.iso https://archive.org/download/windows_10_lite_21h2/Windows10Lite.iso
+          echo "ISO Lite đã tải!"
+
+      - name: Create Disk 25GB
+        run: |
+          cd winlite
+          qemu-img create -f qcow2 win10.qcow2 25G
+          echo "Đã tạo ổ ảo 25GB!"
+
+      - name: Create Autounattend.xml & VB-Audio Script
+        run: |
+          mkdir -p winlite/Setup
+
+          cat << 'EOB' > winlite/Setup/postinstall.bat
+@echo off
+echo Installing Chocolatey...
+@powershell -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy Bypass -Scope Process; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"
+
+echo Installing VB-Audio Virtual Cable...
+choco install vbaudio-virtualcable -y
+
+echo DONE.
+EOB
+
+          cat << 'EOF' > winlite/Autounattend.xml
+<?xml version="1.0" encoding="utf-8"?>
+<unattend xmlns="urn:schemas-microsoft-com:unattend">
+
+  <settings pass="oobeSystem">
+    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64">
+      <AutoLogon>
+        <Username>RDP</Username>
+        <Password>
+          <Value>123456</Value>
+          <PlainText>true</PlainText>
+        </Password>
+        <Enabled>true</Enabled>
+      </AutoLogon>
+
+      <UserAccounts>
+        <LocalAccounts>
+          <LocalAccount wcm:action="add">
+            <Name>RDP</Name>
+            <Group>Administrators</Group>
+            <Password>
+              <Value>123456</Value>
+              <PlainText>true</PlainText>
+            </Password>
+          </LocalAccount>
+        </LocalAccounts>
+      </UserAccounts>
+
+      <FirstLogonCommands>
+        <SynchronousCommand wcm:action="add">
+          <Order>1</Order>
+          <CommandLine>C:\Setup\postinstall.bat</CommandLine>
